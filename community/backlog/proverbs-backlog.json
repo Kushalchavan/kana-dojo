@@ -972,7 +972,7 @@
     "romaji": "Ishibashi wo tataite wataru",
     "english": "Tap a stone bridge before crossing",
     "meaning": "Be very cautious",
-    "completed": false,
+    "completed": true,
     "issued": false
   },
   {
@@ -1036,7 +1036,7 @@
     "english": "Wind in the willow",
     "meaning": "Stay flexible and let problems pass",
     "completed": false,
-    "issued": false
+    "issued": true
   },
   {
     "id": 116,
