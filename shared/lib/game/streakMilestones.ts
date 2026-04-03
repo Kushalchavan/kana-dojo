@@ -33,6 +33,17 @@ const STREAK_MESSAGES: Record<StreakMilestone, string[]> = {
 export const isStreakMilestone = (streak: number): streak is StreakMilestone =>
   STREAK_MILESTONES.includes(streak as StreakMilestone);
 
+export const shouldShowStreakMilestoneOverlay = (streak: number): boolean => {
+  if (streak === 1) {
+    return (
+      process.env.NODE_ENV === 'development' ||
+      process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
+    );
+  }
+
+  return isStreakMilestone(streak);
+};
+
 export const getRandomMilestoneMessage = (milestone: StreakMilestone): string => {
   const pool = STREAK_MESSAGES[milestone];
   const index = Math.floor(Math.random() * pool.length);

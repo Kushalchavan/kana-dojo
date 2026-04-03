@@ -1,15 +1,11 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
+import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Flame } from 'lucide-react';
 import { useHasFinePointer } from '@/shared/hooks/generic/useHasFinePointer';
-import { useCorrect } from '@/shared/hooks/generic/useAudio';
-import {
-  type StreakMilestone,
-  getRandomMilestoneMessage,
-} from '@/shared/lib/game/streakMilestones';
+import { type StreakMilestone } from '@/shared/lib/game/streakMilestones';
 
 interface StreakMilestoneOverlayProps {
   milestone: StreakMilestone | null;
@@ -61,17 +57,10 @@ export default function StreakMilestoneOverlay({
   onDismiss,
 }: StreakMilestoneOverlayProps) {
   const hasFinePointer = useHasFinePointer();
-  const { playCorrect } = useCorrect();
-
-  const message = useMemo(() => {
-    if (!milestone) return '';
-    return getRandomMilestoneMessage(milestone);
-  }, [milestone]);
 
   useEffect(() => {
     if (!milestone) return;
 
-    playCorrect();
     confetti({
       particleCount: 100,
       spread: 70,
@@ -91,7 +80,7 @@ export default function StreakMilestoneOverlay({
         origin: { x: 1 },
       });
     }, 180);
-  }, [milestone, playCorrect]);
+  }, [milestone]);
 
   return (
     <AnimatePresence>
@@ -128,12 +117,12 @@ export default function StreakMilestoneOverlay({
               {milestone} in a row!
             </motion.h2>
 
-            <motion.p
+            {/* <motion.p
               variants={itemVariants}
               className='max-w-2xl text-xl font-semibold text-(--secondary-color) sm:text-2xl'
             >
               + {message}
-            </motion.p>
+            </motion.p> */}
 
             <motion.p
               variants={itemVariants}

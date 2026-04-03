@@ -16,7 +16,7 @@ import { finalizeSession, startSession } from '@/shared/lib/sessionHistory';
 import useClassicSessionStore from '@/shared/store/useClassicSessionStore';
 import {
   type StreakMilestone,
-  isStreakMilestone,
+  shouldShowStreakMilestoneOverlay,
 } from '@/shared/lib/game/streakMilestones';
 
 const Game = () => {
@@ -61,7 +61,7 @@ const Game = () => {
 
   useEffect(() => {
     if (view !== 'playing') return;
-    if (isStreakMilestone(currentStreak)) {
+    if (shouldShowStreakMilestoneOverlay(currentStreak)) {
       setActiveMilestone(currentStreak);
     }
   }, [currentStreak, view]);
