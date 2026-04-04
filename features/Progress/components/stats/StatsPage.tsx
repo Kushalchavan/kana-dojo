@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
 import { ActionButton } from '@/shared/components/ui/ActionButton';
-import { useClick } from '@/shared/hooks/useAudio';
+import { useClick } from '@/shared/hooks/generic/useAudio';
 import useStatsStore from '../../store/useStatsStore';
 import { useStatsAggregator } from '../../hooks/useStatsAggregator';
 import OverviewStatsCard from './OverviewStatsCard';
@@ -180,7 +180,7 @@ export default function StatsPage({ className }: StatsPageProps) {
             Track your Japanese learning journey
           </p>
         </div>
-        <ActionButton
+        {/* <ActionButton
           onClick={handleResetClick}
           colorScheme='secondary'
           borderColorScheme='secondary'
@@ -190,7 +190,7 @@ export default function StatsPage({ className }: StatsPageProps) {
         >
           <Trash className='h-4 w-4' />
           Reset
-        </ActionButton>
+        </ActionButton> */}
       </motion.div>
 
       {/* Reset Confirmation Dialog */}

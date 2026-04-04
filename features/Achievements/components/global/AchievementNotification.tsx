@@ -7,7 +7,7 @@ import { Trophy, X } from 'lucide-react';
 import useAchievementStore, {
   type AchievementNotification as NotificationType,
 } from '../../store/useAchievementStore';
-import { useClick } from '@/shared/hooks/useAudio';
+import { useClick } from '@/shared/hooks/generic/useAudio';
 import { cardBorderStyles } from '@/shared/lib/styles';
 
 interface AchievementNotificationProps {
@@ -62,9 +62,10 @@ const AchievementNotification = ({
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           className={clsx(
             'relative w-80 cursor-pointer p-4',
-            'bg-(--card-color) shadow-lg',
             cardBorderStyles,
-            'transition-shadow duration-200 hover:shadow-xl',
+            'border border-solid border-(--border-color)',
+            'shadow-none',
+            'transition-colors duration-200',
           )}
           onClick={handleViewDetails}
         >

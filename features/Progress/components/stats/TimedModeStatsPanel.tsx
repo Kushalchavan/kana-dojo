@@ -62,8 +62,8 @@ function StatItem({
       <div className='flex items-center gap-4'>
         <div
           className={cn(
-            'flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl',
-            'bg-gradient-to-br from-(--main-color)/10 to-(--secondary-color)/5',
+            'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl',
+            'bg-linear-to-br from-(--main-color)/10 to-(--secondary-color)/5',
             'text-(--main-color)',
             'transition-colors duration-300',
             'group-hover/item:from-(--main-color)/15 group-hover/item:to-(--secondary-color)/10',
@@ -168,13 +168,13 @@ export default function BlitzStatsPanel({
       transition={{ duration: 0.5, delay: 0.4 }}
       className={cn(
         'group relative overflow-hidden rounded-3xl',
-        'border border-(--border-color)/50 bg-(--card-color)',
+        'bg-(--card-color)',
         'p-6',
         className,
       )}
     >
       {/* Decorative gradient */}
-      <div className='pointer-events-none absolute -right-16 -bottom-16 h-48 w-48 rounded-full bg-gradient-to-br from-(--main-color)/5 to-transparent' />
+      <div className='pointer-events-none absolute -right-16 -bottom-16 h-48 w-48 rounded-full bg-linear-to-br from-(--main-color)/5 to-transparent' />
 
       <div className='relative z-10 flex flex-col gap-6'>
         {/* Header */}
@@ -183,7 +183,7 @@ export default function BlitzStatsPanel({
             <motion.div
               animate={{ rotate: [0, 5, -5, 0] }}
               transition={{ duration: 3, repeat: Infinity, repeatDelay: 2 }}
-              className='flex h-14 w-14 items-center justify-center rounded-2xl border border-(--main-color)/20 bg-gradient-to-br from-(--main-color)/20 to-(--secondary-color)/10'
+              className='flex h-14 w-14 items-center justify-center rounded-2xl border border-(--main-color)/20 bg-linear-to-br from-(--main-color)/20 to-(--secondary-color)/10'
             >
               <Zap className='h-7 w-7 text-(--main-color)' />
             </motion.div>
@@ -196,11 +196,11 @@ export default function BlitzStatsPanel({
           </div>
 
           {/* Pill tabs with smooth sliding animation */}
-          <div className='flex gap-1 rounded-[22px] bg-(--background-color) p-1.5'>
+          <div className='flex w-full gap-0 rounded-2xl bg-(--background-color) p-0 sm:w-auto'>
             {CONTENT_TABS.map(tab => {
               const isSelected = activeTab === tab.value;
               return (
-                <div key={tab.value} className='relative'>
+                <div key={tab.value} className='relative flex-1'>
                   {/* Smooth sliding background indicator */}
                   {isSelected && (
                     <motion.div
@@ -216,7 +216,7 @@ export default function BlitzStatsPanel({
                   <button
                     onClick={() => setActiveTab(tab.value)}
                     className={cn(
-                      'relative z-10 cursor-pointer rounded-2xl px-5 pt-2 pb-4 text-sm font-semibold transition-colors duration-300',
+                      'relative z-10 w-full cursor-pointer rounded-2xl px-5 pt-2 pb-4 text-sm font-semibold transition-colors duration-300',
                       isSelected
                         ? 'text-(--background-color)'
                         : 'text-(--secondary-color)/70 hover:text-(--main-color)',

@@ -6,9 +6,15 @@ import {
   faGithub,
   faPatreon,
 } from '@fortawesome/free-brands-svg-icons';
-import { Coffee, Palette, GitBranch, Type, LucideIcon } from 'lucide-react';
+import {
+  Coffee,
+  Palette,
+  GitBranch,
+  Type,
+  LucideIcon,
+} from 'lucide-react';
 import clsx from 'clsx';
-import { useClick } from '@/shared/hooks/useAudio';
+import { useClick } from '@/shared/hooks/generic/useAudio';
 import {
   useThemePreferences,
   ThemesModal,
@@ -63,7 +69,6 @@ const MobileBottomBar = () => {
   const [isPatchNotesOpen, setIsPatchNotesOpen] = useState(false);
   const [isThemeOpen, setIsThemeOpen] = useState(false);
   const [isFontOpen, setIsFontOpen] = useState(false);
-
   const handleClick = (url: string) => {
     playClick();
     window.open(url, '_blank', 'noopener');
@@ -130,31 +135,38 @@ const MobileBottomBar = () => {
 
           return (
             <React.Fragment key={idx}>
-              {link.type === 'fontawesome' ? (
-                <FontAwesomeIcon
-                  icon={link.icon as IconDefinition}
-                  size='sm'
-                  className={clsx(
-                    baseIconClasses,
-                    pulseClasses,
-                    isPatreon && 'text-blue-500',
-                  )}
+              <div className='flex items-center gap-1.5'>
+                <button
+                  type='button'
                   onClick={() => handleClick(link.url)}
-                />
-              ) : (
-                <Icon
-                  size={16}
-                  className={clsx(
-                    baseIconClasses,
-                    pulseClasses,
-                    isDonate &&
-                      'fill-current text-red-500 motion-safe:animate-pulse',
+                  className='flex items-center'
+                  aria-label={`Open ${link.special === 'donate' ? 'Ko-fi' : link.url}`}
+                >
+                  {link.type === 'fontawesome' ? (
+                    <FontAwesomeIcon
+                      icon={link.icon as IconDefinition}
+                      size='sm'
+                      className={clsx(
+                        baseIconClasses,
+                        pulseClasses,
+                        isPatreon && 'text-blue-500',
+                      )}
+                    />
+                  ) : (
+                    <Icon
+                      size={16}
+                      className={clsx(
+                        baseIconClasses,
+                        pulseClasses,
+                        isDonate &&
+                          'fill-current text-red-500 motion-safe:animate-pulse',
+                      )}
+                    />
                   )}
-                  onClick={() => handleClick(link.url)}
-                />
-              )}
+                </button>
+              </div>
               {idx === 1 && socialLinks.length > 2 && (
-                <span className='text-sm text-(--secondary-color) select-none'>
+                <span className='text-sm text-(--main-color) select-none'>
                   ~
                 </span>
               )}
@@ -164,31 +176,33 @@ const MobileBottomBar = () => {
       </div>
 
       <div className='flex items-center gap-2 text-xs text-(--secondary-color)'>
-        <span
+        <button
+          type='button'
           className='hidden text-xs text-(--secondary-color) hover:cursor-pointer hover:text-(--main-color) lg:inline-block'
           onClick={() => handleClick('https://ko-fi.com/kanadojo')}
         >
           made with ❤️ by the community
-        </span>
-        <span className='hidden text-sm text-(--secondary-color) select-none lg:inline-block'>
+        </button>
+        <span className='hidden text-sm text-(--main-color) select-none lg:inline-block'>
           ~
         </span>
         {infoItems.map((item, idx) => {
           const content = (
-            <span
+            <button
+              type='button'
               className='flex gap-1 hover:cursor-pointer hover:text-(--main-color)'
               onClick={item.onClick}
             >
               <item.icon size={16} />
               {item.text}
-            </span>
+            </button>
           );
 
           return (
             <React.Fragment key={idx}>
               {content}
               {idx < infoItems.length - 1 && (
-                <span className='text-sm text-(--secondary-color) select-none'>
+                  <span className='text-sm text-(--main-color) select-none'>
                   ~
                 </span>
               )}

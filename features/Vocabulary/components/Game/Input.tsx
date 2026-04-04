@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { motion } from 'framer-motion';
 import { toHiragana } from 'wanakana';
 import { IVocabObj } from '@/features/Vocabulary/store/useVocabStore';
-import { useClick, useCorrect, useError } from '@/shared/hooks/useAudio';
+import { useClick, useCorrect, useError } from '@/shared/hooks/generic/useAudio';
 import { useStopwatch } from 'react-timer-hook';
 import { useGameStats, useStatsDisplay } from '@/features/Progress';
 import Stars from '@/shared/components/Game/Stars';
@@ -14,6 +14,9 @@ import FuriganaText from '@/shared/components/text/FuriganaText';
 import { useCrazyModeTrigger } from '@/features/CrazyMode/hooks/useCrazyModeTrigger';
 import { getGlobalAdaptiveSelector } from '@/shared/lib/adaptiveSelection';
 import { GameBottomBar } from '@/shared/components/Game/GameBottomBar';
+import useClassicSessionStore from '@/shared/store/useClassicSessionStore';
+import { useThemePreferences } from '@/features/Preferences';
+import { cn } from '@/shared/lib/utils';
 
 // Get the global adaptive selector for weighted character selection
 const adaptiveSelector = getGlobalAdaptiveSelector();
@@ -32,8 +35,11 @@ const VocabInputGame = ({
   isHidden,
   isReverse = false,
 }: VocabInputGameProps) => {
+  const logAttempt = useClassicSessionStore(state => state.logAttempt);
   const { score, setScore } = useStatsDisplay();
   const gameStats = useGameStats();
+
+  const isGlassMode = useThemePreferences().isGlassMode;
 
   const speedStopwatch = useStopwatch({ autoStart: false });
 
@@ -80,6 +86,7 @@ const VocabInputGame = ({
       : correctWordObj?.reading;
 
   const [displayAnswerSummary, setDisplayAnswerSummary] = useState(false);
+  const [promptSequence, setPromptSequence] = useState(0);
 
   // Generate new character - defined before useCallback that uses it
   const generateNewCharacter = useCallback(() => {
@@ -103,6 +110,7 @@ const VocabInputGame = ({
     setInputValue('');
     setDisplayAnswerSummary(false);
     generateNewCharacter();
+    setPromptSequence(prev => prev + 1);
     setBottomBarState('check');
     speedStopwatch.reset();
     speedStopwatch.start();
@@ -194,6 +202,18 @@ const VocabInputGame = ({
     adaptiveSelector.updateCharacterWeight(correctChar, true);
     setBottomBarState('correct');
     setDisplayAnswerSummary(true);
+    logAttempt({
+      questionId: correctChar,
+      questionPrompt: correctChar,
+      expectedAnswers: Array.isArray(targetChar)
+        ? targetChar.map(v => String(v))
+        : [String(targetChar)],
+      userAnswer: inputValue.trim(),
+      inputKind: 'type',
+      isCorrect: true,
+      timeTakenMs: answerTimeMs,
+      extra: { isReverse, quizType },
+    });
   };
 
   const handleWrongAnswer = () => {
@@ -217,6 +237,17 @@ const VocabInputGame = ({
     triggerCrazyMode();
     adaptiveSelector.updateCharacterWeight(correctChar, false);
     setBottomBarState('wrong');
+    logAttempt({
+      questionId: correctChar,
+      questionPrompt: correctChar,
+      expectedAnswers: Array.isArray(targetChar)
+        ? targetChar.map(v => String(v))
+        : [String(targetChar)],
+      userAnswer: inputValue.trim(),
+      inputKind: 'type',
+      isCorrect: false,
+      extra: { isReverse, quizType },
+    });
   };
 
   const handleEnter = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -266,10 +297,15 @@ const VocabInputGame = ({
                   : 'What is the meaning?'
                 : 'What is the reading?'}
             </span>
-            <div className='flex flex-row items-center gap-1'>
+            <div
+              className={cn(
+                'flex flex-row items-center gap-1',
+                isGlassMode && 'rounded-xl bg-(--card-color) px-4 py-2',
+              )}
+            >
               <motion.div
-                initial={{ opacity: 0, y: -30, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
+                initial={{ opacity: 0, x: 30, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
                 transition={{
                   type: 'spring',
                   stiffness: 150,
@@ -296,6 +332,8 @@ const VocabInputGame = ({
                     variant='icon-only'
                     size='sm'
                     className='bg-(--card-color) text-(--secondary-color)'
+                    autoPlay
+                    autoPlayTrigger={promptSequence}
                   />
                 )}
               </motion.div>
@@ -314,10 +352,11 @@ const VocabInputGame = ({
               'rounded-2xl border border-(--border-color) bg-(--card-color)',
               'text-top text-left text-lg font-medium lg:text-xl',
               'text-(--secondary-color) placeholder:text-base placeholder:font-normal placeholder:text-(--secondary-color)/40',
-              'resize-none focus:outline-none',
+              'game-input resize-none focus:outline-none',
               'transition-colors duration-200 ease-out',
               showContinue && 'cursor-not-allowed opacity-60',
             )}
+            autoFocus
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') {

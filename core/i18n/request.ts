@@ -19,10 +19,12 @@ const NAMESPACES = [
   'blog',
   'translator',
   'metadata',
+  'faq',
   'practiceLanding',
   'welcome',
   'experiments',
   'legal',
+  'kanaChart',
 ] as const;
 
 // Cache for loaded messages to avoid re-importing in dev

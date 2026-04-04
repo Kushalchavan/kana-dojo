@@ -16,9 +16,15 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import useOnboardingStore from '@/shared/store/useOnboardingStore';
 import { themeSets, useThemePreferences } from '@/features/Preferences';
-import fonts from '@/features/Preferences/data/fonts';
-import { isRecommendedFont } from '@/features/Preferences/data/recommendedFonts';
-import { useClick } from '@/shared/hooks/useAudio';
+import {
+  isPremiumThemeId,
+  getWallpaperStyles,
+  getThemeDefaultWallpaperId,
+} from '@/features/Preferences/data/themes/themes';
+import { getWallpaperById } from '@/features/Preferences/data/wallpapers/wallpapers';
+import fonts from '@/features/Preferences/data/fonts/fonts';
+import { isRecommendedFont } from '@/features/Preferences/data/fonts/recommendedFonts';
+import { useClick } from '@/shared/hooks/generic/useAudio';
 import { cardBorderStyles } from '@/shared/lib/styles';
 import { ActionButton } from '@/shared/components/ui/ActionButton';
 
@@ -56,8 +62,6 @@ const WelcomeModal = () => {
     setFont,
   } = useThemePreferences();
 
-  const [localTheme, setLocalTheme] = useState(selectedTheme);
-  const [localFont, setLocalFont] = useState(currentFont);
   const recommendedFonts = useMemo(
     () => fonts.filter(fontObj => isRecommendedFont(fontObj.name)),
     [],
@@ -104,11 +108,6 @@ const WelcomeModal = () => {
       return () => clearTimeout(timer);
     }
   }, [hasSeenWelcome, pathname, setHasSeenWelcome]);
-
-  useEffect(() => {
-    setLocalTheme(selectedTheme);
-    setLocalFont(currentFont);
-  }, [selectedTheme, currentFont]);
 
   useEffect(() => {
     // Reset scroll position when step changes
@@ -201,10 +200,7 @@ const WelcomeModal = () => {
               </div>
 
               <div className='flex items-center gap-3 rounded-lg bg-(--background-color) p-3'>
-                <Type
-                  className='flex-shrink-0 text-(--main-color)'
-                  size={24}
-                />
+                <Type className='flex-shrink-0 text-(--main-color)' size={24} />
                 <div>
                   <h3 className='font-semibold text-(--main-color)'>
                     {t('features.font.title')}
@@ -218,7 +214,7 @@ const WelcomeModal = () => {
               <ActionButton
                 className='py-4 text-xl font-semibold tracking-wide uppercase'
                 borderRadius='3xl'
-                borderBottomThickness={8}
+                borderBottomThickness={16}
                 onClick={handleTryDemo}
               >
                 <CircleStar
@@ -378,11 +374,13 @@ const WelcomeModal = () => {
               </p>
             </div>
 
-            <div className='max-h-96 space-y-6 overflow-y-auto px-1'>
+            <div className='scrollbar-thin scrollbar-thumb-(--border-color) scrollbar-track-transparent max-h-[45vh] space-y-6 overflow-y-auto px-1 sm:max-h-96'>
               {themeSets
                 .filter(
                   themeSet =>
-                    themeSet.name === 'Base' || themeSet.name === 'Dark',
+                    themeSet.name === 'Base' ||
+                    themeSet.name === 'Dark' ||
+                    themeSet.name.startsWith('Premium'),
                 )
                 .map(themeSet => {
                   let filteredThemes = themeSet.themes;
@@ -417,9 +415,23 @@ const WelcomeModal = () => {
 
                   return (
                     <div key={themeSet.name} className='space-y-3'>
-                      <div className='flex items-center gap-2 text-lg font-medium text-(--main-color)'>
-                        <themeSet.icon size={20} />
-                        {themeSet.name}
+                      <div className='flex items-center gap-2 text-lg font-medium'>
+                        <themeSet.icon
+                          size={20}
+                          className='text-(--secondary-color)'
+                        />
+                        {themeSet.name.startsWith('Premium') ? (
+                          <span>
+                            <span className='text-(--main-color)'>Premium</span>
+                            <span className='ml-1 text-(--secondary-color)'>
+                              (experimental)
+                            </span>
+                          </span>
+                        ) : (
+                          <span className='text-(--main-color)'>
+                            {themeSet.name}
+                          </span>
+                        )}
                         {/* <span className='text-sm font-normal text-(--secondary-color)'>
                       ({themeSet.themes.length})
                     </span> */}
@@ -427,35 +439,65 @@ const WelcomeModal = () => {
                       <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'>
                         {filteredThemes.map(theme => {
                           const isChaosTheme = theme.id === '?';
+                          const isPremiumTheme = isPremiumThemeId(theme.id);
+
+                          // Get wallpaper for premium themes
+                          const themeWallpaperId = getThemeDefaultWallpaperId(
+                            theme.id,
+                          );
+                          const wallpaper = themeWallpaperId
+                            ? getWallpaperById(themeWallpaperId)
+                            : undefined;
+
+                          // Determine background
                           const background = isChaosTheme
                             ? CHAOS_THEME_GRADIENT
                             : theme.backgroundColor;
+
+                          const wallpaperStyles = wallpaper
+                            ? getWallpaperStyles(
+                                wallpaper.url,
+                                false,
+                                wallpaper.urlWebp,
+                              )
+                            : {};
+
                           return (
                             <button
                               key={theme.id}
-                              className='cursor-pointer rounded-lg p-3 transition-all duration-200 hover:opacity-90 active:scale-95'
+                              className='w-full cursor-pointer rounded-lg p-3'
                               style={{
-                                background,
-                                border:
-                                  localTheme === theme.id
-                                    ? `1px solid ${theme.mainColor}`
-                                    : `1px solid ${theme.borderColor}`,
+                                ...(wallpaper
+                                  ? wallpaperStyles
+                                  : { background }),
+                                borderWidth: isPremiumTheme ? 0 : '1px',
+                                borderStyle: isPremiumTheme
+                                  ? undefined
+                                  : 'solid',
+                                borderColor: isPremiumTheme
+                                  ? undefined
+                                  : theme.borderColor,
+                                outline:
+                                  selectedTheme === theme.id
+                                    ? `3px solid ${theme.secondaryColor}`
+                                    : 'none',
                               }}
                               onClick={() => {
                                 playClick();
-                                setLocalTheme(theme.id);
                                 setSelectedTheme(theme.id);
                               }}
                               title={theme.id}
                             >
-                              <div className='mb-2 text-left'>
+                              <div
+                                className={`mb-2 h-8 overflow-hidden text-left ${isPremiumTheme ? 'invisible' : ''}`}
+                              >
                                 {isChaosTheme ? (
                                   <span className='relative flex items-center justify-start text-sm text-white capitalize'>
                                     <span
                                       className='absolute left-0'
                                       style={{
                                         color:
-                                          localTheme === theme.id
+                                          selectedTheme === theme.id
                                             ? '#000'
                                             : 'transparent',
                                       }}
@@ -466,16 +508,15 @@ const WelcomeModal = () => {
                                   </span>
                                 ) : (
                                   <span
-                                    className='text-sm capitalize'
+                                    className='block truncate text-sm whitespace-nowrap capitalize'
                                     style={{ color: theme.mainColor }}
                                   >
-                                    {localTheme === theme.id && '\u2B24 '}
                                     {theme.id.replaceAll('-', ' ')}
                                   </span>
                                 )}
                               </div>
                               <div
-                                className='flex gap-1.5'
+                                className='flex min-h-4 gap-1.5'
                                 style={{
                                   visibility: isChaosTheme
                                     ? 'hidden'
@@ -483,11 +524,11 @@ const WelcomeModal = () => {
                                 }}
                               >
                                 <div
-                                  className='h-4 w-4 rounded-full'
+                                  className={`h-4 w-4 rounded-full ${isPremiumTheme ? 'hidden' : ''}`}
                                   style={{ background: theme.mainColor }}
                                 />
                                 <div
-                                  className='h-4 w-4 rounded-full'
+                                  className={`h-4 w-4 rounded-full ${isPremiumTheme ? 'hidden' : ''}`}
                                   style={{ background: theme.secondaryColor }}
                                 />
                               </div>
@@ -528,14 +569,16 @@ const WelcomeModal = () => {
                     key={fontObj.name}
                     className={clsx(
                       'flex cursor-pointer items-center justify-center overflow-hidden rounded-xl border-0 px-4 py-4 transition-all duration-200 hover:opacity-90 active:scale-95',
-                      localFont === fontObj.name
-                        ? 'border-(--main-color)'
-                        : 'border-(--card-color)',
                     )}
-                    style={{ backgroundColor: 'var(--background-color)' }}
+                    style={{
+                      backgroundColor: 'var(--background-color)',
+                      outline:
+                        currentFont === fontObj.name
+                          ? '3px solid var(--secondary-color)'
+                          : 'none',
+                    }}
                     onClick={() => {
                       playClick();
-                      setLocalFont(fontObj.name);
                       setFont(fontObj.name);
                     }}
                   >
@@ -545,9 +588,6 @@ const WelcomeModal = () => {
                         fontObj.font.className,
                       )}
                     >
-                      <span className='text-(--secondary-color)'>
-                        {localFont === fontObj.name ? '\u2B24 ' : ''}
-                      </span>
                       <span className='text-(--main-color)'>
                         {fontObj.name}
                         {fontObj.name === 'Zen Maru Gothic' &&
@@ -621,7 +661,7 @@ const WelcomeModal = () => {
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
           className={clsx(
-            'max-h-[85vh] w-full overflow-y-auto md:w-4/5 lg:w-3/5',
+            'flex max-h-[85vh] w-full flex-col overflow-hidden md:w-4/5 lg:w-3/5',
             'm-3 rounded-2xl bg-(--card-color)',
             'shadow-2xl shadow-black/20',
             cardBorderStyles,
@@ -673,8 +713,14 @@ const WelcomeModal = () => {
           </div>
 
           {/* Content */}
-          <div ref={contentRef} className='p-3 pb-2 sm:p-5'>
-            {renderStepContent()}
+          <div
+            ref={contentRef}
+            className={clsx(
+              'min-h-0 p-3 pb-2 sm:p-5',
+              step === 'welcome' ? 'overflow-y-auto' : 'overflow-hidden',
+            )}
+          >
+            <div key={step}>{renderStepContent()}</div>
           </div>
 
           {/* Actions */}
@@ -686,7 +732,7 @@ const WelcomeModal = () => {
                   className={clsx(
                     'flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 sm:px-6 sm:py-3',
                     'text-(--secondary-color) hover:text-(--main-color)',
-                    'transition-all duration-200 hover:bg-(--background-color)',
+                    'transition-all duration-100 hover:bg-(--background-color)',
                     'text-sm sm:text-base',
                   )}
                 >
@@ -705,7 +751,7 @@ const WelcomeModal = () => {
                 className={clsx(
                   'flex cursor-pointer items-center justify-center gap-2 rounded-xl px-6 py-2 sm:px-8 sm:py-3',
                   'text-sm font-medium text-(--main-color) sm:text-base',
-                  'transition-all duration-200 hover:bg-(--background-color) active:scale-98',
+                  'transition-all duration-100 hover:bg-(--background-color) active:scale-98',
                 )}
               >
                 <span>

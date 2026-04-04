@@ -10,7 +10,7 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-
+.idea
 /AI.md
 
 # testing
@@ -26,6 +26,17 @@
 # misc
 .DS_Store
 *.pem
+
+# AI tooling state
+/.agent/
+/.agents/
+/.claude/
+/.claudeignore
+/.gemini/
+/.kiro/
+
+# editor settings (local-only)
+/.vscode/
 
 # debug
 npm-debug.log*
@@ -43,6 +54,11 @@ dev-output.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Wallpaper source images (only processed versions in public/wallpapers/ are tracked)
+
+
+
 
 # Audio files - WAV kept locally as fallback, only Opus tracked in git
 /public/sounds/**/*.wav

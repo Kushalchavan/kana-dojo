@@ -4,10 +4,9 @@ import { CircleCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { motion } from 'framer-motion';
 import useKanjiStore, { IKanjiObj } from '@/features/Kanji/store/useKanjiStore';
-import { useClick, useCorrect, useError } from '@/shared/hooks/useAudio';
+import { useClick, useCorrect, useError } from '@/shared/hooks/generic/useAudio';
 // import GameIntel from '@/shared/components/Game/GameIntel';
 import { useStopwatch } from 'react-timer-hook';
-import useStats from '@/shared/hooks/useStats';
 import { useStatsStore } from '@/features/Progress';
 import { useShallow } from 'zustand/react/shallow';
 import Stars from '@/shared/components/Game/Stars';
@@ -17,6 +16,9 @@ import FuriganaText from '@/shared/components/text/FuriganaText';
 import { useCrazyModeTrigger } from '@/features/CrazyMode/hooks/useCrazyModeTrigger';
 import { getGlobalAdaptiveSelector } from '@/shared/lib/adaptiveSelection';
 import { GameBottomBar } from '@/shared/components/Game/GameBottomBar';
+import useClassicSessionStore from '@/shared/store/useClassicSessionStore';
+import { useThemePreferences } from '@/features/Preferences';
+import { cn } from '@/shared/lib/utils';
 
 // Get the global adaptive selector for weighted character selection
 const adaptiveSelector = getGlobalAdaptiveSelector();
@@ -35,6 +37,7 @@ const KanjiInputGame = ({
   isHidden,
   isReverse = false,
 }: KanjiInputGameProps) => {
+  const logAttempt = useClassicSessionStore(state => state.logAttempt);
   // Get the current JLPT level from the Kanji store
   const selectedKanjiCollection = useKanjiStore(
     state => state.selectedKanjiCollection,
@@ -47,6 +50,11 @@ const KanjiInputGame = ({
     recordAnswerTime,
     incrementWrongStreak,
     resetWrongStreak,
+    incrementCorrectAnswers,
+    incrementWrongAnswers,
+    addCharacterToHistory,
+    addCorrectAnswerTime,
+    incrementCharacterScore,
   } = useStatsStore(
     useShallow(state => ({
       score: state.score,
@@ -55,18 +63,17 @@ const KanjiInputGame = ({
       recordAnswerTime: state.recordAnswerTime,
       incrementWrongStreak: state.incrementWrongStreak,
       resetWrongStreak: state.resetWrongStreak,
+      incrementCorrectAnswers: state.incrementCorrectAnswers,
+      incrementWrongAnswers: state.incrementWrongAnswers,
+      addCharacterToHistory: state.addCharacterToHistory,
+      addCorrectAnswerTime: state.addCorrectAnswerTime,
+      incrementCharacterScore: state.incrementCharacterScore,
     })),
   );
 
-  const speedStopwatch = useStopwatch({ autoStart: false });
+  const isGlassMode = useThemePreferences().isGlassMode;
 
-  const {
-    incrementCorrectAnswers,
-    incrementWrongAnswers,
-    addCharacterToHistory,
-    addCorrectAnswerTime,
-    incrementCharacterScore,
-  } = useStats();
+  const speedStopwatch = useStopwatch({ autoStart: false });
 
   const { playClick } = useClick();
   const { playCorrect } = useCorrect();
@@ -110,6 +117,7 @@ const KanjiInputGame = ({
       ];
 
   const [displayAnswerSummary, setDisplayAnswerSummary] = useState(false);
+  const [promptSequence, setPromptSequence] = useState(0);
   const [feedback, setFeedback] = useState<React.ReactElement>(
     <>{'feedback ~'}</>,
   );
@@ -228,6 +236,18 @@ const KanjiInputGame = ({
         <CircleCheck className='inline text-(--main-color)' />
       </>,
     );
+    logAttempt({
+      questionId: correctChar,
+      questionPrompt: correctChar,
+      expectedAnswers: Array.isArray(targetChar)
+        ? targetChar.map(v => String(v))
+        : [String(targetChar)],
+      userAnswer: userInput,
+      inputKind: 'type',
+      isCorrect: true,
+      timeTakenMs: answerTimeMs,
+      extra: { isReverse },
+    });
   };
 
   const handleWrongAnswer = () => {
@@ -245,6 +265,17 @@ const KanjiInputGame = ({
     adaptiveSelector.updateCharacterWeight(correctChar, false);
     incrementWrongStreak();
     setBottomBarState('wrong');
+    logAttempt({
+      questionId: correctChar,
+      questionPrompt: correctChar,
+      expectedAnswers: Array.isArray(targetChar)
+        ? targetChar.map(v => String(v))
+        : [String(targetChar)],
+      userAnswer: inputValue.trim(),
+      inputKind: 'type',
+      isCorrect: false,
+      extra: { isReverse },
+    });
   };
 
   const generateNewCharacter = () => {
@@ -265,6 +296,7 @@ const KanjiInputGame = ({
     setInputValue('');
     setDisplayAnswerSummary(false);
     generateNewCharacter();
+    setPromptSequence(prev => prev + 1);
     setBottomBarState('check');
     speedStopwatch.reset();
     speedStopwatch.start();
@@ -305,10 +337,15 @@ const KanjiInputGame = ({
         />
       ) : (
         <>
-          <div className='flex flex-row items-center gap-1'>
+          <div
+            className={cn(
+              'flex flex-row items-center gap-1',
+              isGlassMode && 'rounded-xl bg-(--card-color) px-4 py-2',
+            )}
+          >
             <motion.div
-              initial={{ opacity: 0, y: -30, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
+              initial={{ opacity: 0, x: 30, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
               transition={{
                 type: 'spring',
                 stiffness: 150,
@@ -335,6 +372,8 @@ const KanjiInputGame = ({
                   variant='icon-only'
                   size='sm'
                   className='bg-(--card-color) text-(--secondary-color)'
+                  autoPlay
+                  autoPlayTrigger={promptSequence}
                 />
               )}
             </motion.div>
@@ -352,10 +391,11 @@ const KanjiInputGame = ({
               'rounded-2xl border-1 border-(--border-color) bg-(--card-color)',
               'text-top text-left text-lg font-medium lg:text-xl',
               'text-(--secondary-color) placeholder:text-base placeholder:font-normal placeholder:text-(--secondary-color)/40',
-              'resize-none focus:outline-none',
+              'game-input resize-none focus:outline-none',
               'transition-colors duration-200 ease-out',
               showContinue && 'cursor-not-allowed opacity-60',
             )}
+            autoFocus
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') {

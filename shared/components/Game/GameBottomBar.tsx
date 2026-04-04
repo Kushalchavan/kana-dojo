@@ -1,5 +1,5 @@
 'use client';
-import { ReactNode } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import {
   CircleCheck,
   CircleX,
@@ -43,10 +43,29 @@ export const GameBottomBar = ({
   const showContinue = isCorrect;
   // When hideRetry is true, treat wrong state like check state for button display
   const showRetryButton = isWrong && !hideRetry;
+  const showNextButton =
+    actionLabel === 'next' || showContinue || (isWrong && hideRetry);
 
   // Default titles if not provided
-  const defaultTitle = isCorrect ? 'Nicely done!' : 'Wrong! Correct answer:';
+  const defaultTitle = isCorrect
+    ? 'Nicely done!'
+    : isWrong
+      ? 'Wrong! Correct answer:'
+      : '';
   const displayTitle = feedbackTitle || defaultTitle;
+
+  // Keep feedback tied to the most recently checked question.
+  // This prevents the next question's answer from flashing during transition.
+  const [frozenTitle, setFrozenTitle] = useState(displayTitle);
+  const [frozenFeedbackContent, setFrozenFeedbackContent] =
+    useState<ReactNode>(feedbackContent);
+
+  useEffect(() => {
+    if (state !== 'check') {
+      setFrozenTitle(displayTitle);
+      setFrozenFeedbackContent(feedbackContent);
+    }
+  }, [state, displayTitle, feedbackContent]);
 
   return (
     <div
@@ -73,17 +92,18 @@ export const GameBottomBar = ({
               : 'pointer-events-none -translate-x-4 opacity-0 sm:-translate-x-8',
           )}
         >
-          {isCorrect ? (
+          {isCorrect && (
             <CircleCheck className='h-10 w-10 text-(--main-color) sm:h-12 sm:w-12' />
-          ) : (
+          )}
+          {isWrong && (
             <CircleX className='h-10 w-10 text-(--main-color) sm:h-12 sm:w-12' />
           )}
           <div className='flex flex-col'>
             <span className='text-lg text-(--secondary-color) sm:text-xl'>
-              {displayTitle}
+              {frozenTitle}
             </span>
             <span className='text-sm text-(--main-color) sm:text-lg'>
-              {feedbackContent}
+              {frozenFeedbackContent}
             </span>
           </div>
         </div>
@@ -108,12 +128,13 @@ export const GameBottomBar = ({
                 !showContinue &&
                 !showRetryButton &&
                 'cursor-default opacity-60',
+              (canCheck || showNextButton) && 'animate-float [--float-distance:-4.5px]'
             )}
             onClick={onAction}
           >
             {showRetryButton ? (
               <RotateCcw className='h-8 w-8' />
-            ) : state === 'correct' ? (
+            ) : showNextButton ? (
               <CircleArrowRight className='h-8 w-8' />
             ) : (
               <CircleCheck className='h-8 w-8' />

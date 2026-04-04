@@ -4,12 +4,17 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { useRouter } from '@/core/i18n/routing';
 import { Random } from 'random-js';
-import { useClick, useCorrect, useError } from '@/shared/hooks/useAudio';
+import { useClick, useCorrect, useError } from '@/shared/hooks/generic/useAudio';
 import { shuffle } from '@/shared/lib/shuffle';
 import { saveSession } from '@/shared/lib/gauntletStats';
 import useGauntletSettingsStore from '@/shared/store/useGauntletSettingsStore';
 
 import { statsTracking } from '@/features/Progress';
+import {
+  appendAttempt,
+  finalizeSession,
+  startSession,
+} from '@/shared/lib/sessionHistory';
 import EmptyState from './EmptyState';
 import PreGameScreen from './PreGameScreen';
 import ActiveGame from './ActiveGame';
@@ -43,6 +48,41 @@ const calculateRegenThreshold = (totalQuestions: number): number => {
   return Math.max(5, Math.min(20, Math.ceil(totalQuestions * 0.1)));
 };
 
+const getQuestionItemId = <T,>(item: T): string => {
+  if (typeof item === 'object' && item !== null) {
+    const obj = item as Record<string, unknown>;
+    if ('kana' in obj) return String(obj.kana);
+    if ('kanjiChar' in obj) return String(obj.kanjiChar);
+    if ('word' in obj) return String(obj.word);
+    if ('id' in obj) return String(obj.id);
+  }
+  return String(item);
+};
+
+function stabilizeQueueNoImmediateRepeats<T>(
+  queue: GauntletQuestion<T>[],
+): GauntletQuestion<T>[] {
+  for (let i = 0; i < queue.length - 1; i++) {
+    const currentId = getQuestionItemId(queue[i].item);
+    const nextId = getQuestionItemId(queue[i + 1].item);
+    if (currentId !== nextId) continue;
+
+    let swapIndex = -1;
+    for (let j = i + 2; j < queue.length; j++) {
+      if (getQuestionItemId(queue[j].item) !== currentId) {
+        swapIndex = j;
+        break;
+      }
+    }
+
+    if (swapIndex !== -1) {
+      [queue[i + 1], queue[swapIndex]] = [queue[swapIndex], queue[i + 1]];
+    }
+  }
+
+  return queue;
+}
+
 /**
  * Generate a shuffled queue of all questions
  * Each character appears `repetitions` times in random order
@@ -69,6 +109,8 @@ function generateQuestionQueue<T>(
     const j = random.integer(0, i);
     [queue[i], queue[j]] = [queue[j], queue[i]];
   }
+
+  stabilizeQueueNoImmediateRepeats(queue);
 
   // Set indices after shuffle
   queue.forEach((q, i) => {
@@ -111,10 +153,10 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
     const storeMode = gauntletSettings.getGameMode(dojoType);
     return storeMode || initialGameMode || 'Pick';
   });
-  const [difficulty, setDifficultyState] = useState<GauntletDifficulty>(
+  const [difficulty, setDifficultyState] = useState<GauntletDifficulty>(() =>
     gauntletSettings.getDifficulty(dojoType),
   );
-  const [repetitions, setRepetitionsState] = useState<RepetitionCount>(
+  const [repetitions, setRepetitionsState] = useState<RepetitionCount>(() =>
     gauntletSettings.getRepetitions(dojoType),
   );
 
@@ -191,10 +233,35 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
     'id'
   > | null>(null);
   const [isNewBest, setIsNewBest] = useState(false);
+  const [endedReason, setEndedReason] = useState<
+    'completed' | 'failed' | 'manual_quit'
+  >('completed');
+  const sessionIdRef = useRef<string | null>(null);
+  const sessionStartPromiseRef = useRef<Promise<string> | null>(null);
+  const finalizedRef = useRef(false);
 
   const pickModeSupported = !!(generateOptions && getCorrectOption);
   // Gauntlet mode always uses normal mode (never reverse)
   const isReverseActive = false;
+
+  const ensureSessionId = useCallback(async (): Promise<string> => {
+    if (sessionIdRef.current) return sessionIdRef.current;
+    if (sessionStartPromiseRef.current) {
+      const id = await sessionStartPromiseRef.current;
+      sessionIdRef.current = id;
+      return id;
+    }
+    const id = await startSession({
+      sessionType: 'gauntlet',
+      dojoType,
+      gameMode: gameMode.toLowerCase(),
+      selectedSets: selectedSets || [],
+      selectedCount: items.length,
+      route: pathname || '',
+    });
+    sessionIdRef.current = id;
+    return id;
+  }, [dojoType, gameMode, selectedSets, items.length, pathname]);
 
   const totalQuestions = items.length * repetitions;
   const currentQuestion = questionQueue[currentIndex] || null;
@@ -251,27 +318,78 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
     setLifeJustLost(false);
     setUserAnswer('');
     setWrongSelectedAnswers([]);
+    finalizedRef.current = false;
+    setEndedReason('completed');
 
     // Generate initial options for the first question (Pick mode only)
     if (queue.length > 0) {
       generateShuffledOptions(queue[0].item);
     }
 
+    sessionStartPromiseRef.current = startSession({
+      sessionType: 'gauntlet',
+      dojoType,
+      gameMode: gameMode.toLowerCase(),
+      selectedSets: selectedSets || [],
+      selectedCount: items.length,
+      route: pathname || '',
+    });
+    sessionStartPromiseRef.current.then(id => {
+      sessionIdRef.current = id;
+    });
+
     setPhase('playing');
-  }, [items, repetitions, difficulty, generateShuffledOptions, playClick]);
+  }, [
+    items,
+    repetitions,
+    difficulty,
+    generateShuffledOptions,
+    playClick,
+    dojoType,
+    gameMode,
+    selectedSets,
+    pathname,
+  ]);
 
   // Get a unique identifier for the current question item
-  const getItemId = useCallback((item: T): string => {
-    // Try common patterns for getting an identifier
-    if (typeof item === 'object' && item !== null) {
-      const obj = item as Record<string, unknown>;
-      if ('kana' in obj) return String(obj.kana);
-      if ('kanjiChar' in obj) return String(obj.kanjiChar);
-      if ('word' in obj) return String(obj.word);
-      if ('id' in obj) return String(obj.id);
-    }
-    return String(item);
-  }, []);
+  const getItemId = useCallback(
+    (item: T): string => getQuestionItemId(item),
+    [],
+  );
+
+  const ensureNextQuestionIsDifferent = useCallback(
+    (
+      queue: GauntletQuestion<T>[],
+      answeredIndex: number,
+    ): GauntletQuestion<T>[] => {
+      const nextIndex = answeredIndex + 1;
+      if (nextIndex >= queue.length) return queue;
+
+      const currentId = getItemId(queue[answeredIndex].item);
+      const nextId = getItemId(queue[nextIndex].item);
+      if (currentId !== nextId) return queue;
+
+      const workingQueue = [...queue];
+      let swapIndex = -1;
+      for (let i = nextIndex + 1; i < workingQueue.length; i++) {
+        if (getItemId(workingQueue[i].item) !== currentId) {
+          swapIndex = i;
+          break;
+        }
+      }
+
+      if (swapIndex === -1) {
+        return queue;
+      }
+
+      [workingQueue[nextIndex], workingQueue[swapIndex]] = [
+        workingQueue[swapIndex],
+        workingQueue[nextIndex],
+      ];
+      return workingQueue;
+    },
+    [getItemId],
+  );
 
   // End game and calculate stats
   // Accepts actual values as parameters to avoid stale closure issues,
@@ -285,6 +403,7 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
       actualQuestionsCompleted,
       actualBestStreak,
       actualCurrentStreak,
+      endedReason: actualEndedReason,
     }: {
       completed: boolean;
       actualLives: number;
@@ -293,6 +412,7 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
       actualQuestionsCompleted: number;
       actualBestStreak: number;
       actualCurrentStreak: number;
+      endedReason?: 'completed' | 'failed' | 'manual_quit';
     }) => {
       const totalTimeMs = Date.now() - startTime;
       const validAnswerTimes = answerTimes.filter(t => t > 0);
@@ -334,10 +454,41 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
       };
 
       setSessionStats(stats);
+      setEndedReason(
+        actualEndedReason ?? (completed ? 'completed' : 'failed'),
+      );
 
       // Save to storage
       const { isNewBest: newBest } = await saveSession(stats);
       setIsNewBest(newBest);
+
+      if (!finalizedRef.current) {
+        finalizedRef.current = true;
+        const sessionId = await ensureSessionId();
+        await finalizeSession({
+          sessionId,
+          endedReason:
+            actualEndedReason === 'manual_quit'
+              ? 'manual_quit'
+              : completed
+                ? 'completed'
+                : 'failed',
+          endedAbruptly: actualEndedReason === 'manual_quit',
+          correct: actualCorrectAnswers,
+          wrong: actualWrongAnswers,
+          bestStreak: actualBestStreak,
+          modePayload: {
+            difficulty,
+            gameMode,
+            totalQuestions,
+            questionsCompleted: actualQuestionsCompleted,
+            startingLives: maxLives,
+            livesRemaining: actualLives,
+            livesRegenerated,
+            repetitions,
+          },
+        });
+      }
 
       // Track gauntlet stats for achievements
       const livesLost = maxLives - actualLives + livesRegenerated;
@@ -366,6 +517,7 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
       items.length,
       repetitions,
       selectedSets,
+      ensureSessionId,
     ],
   );
 
@@ -405,6 +557,7 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
           actualQuestionsCompleted: questionsCompleted,
           actualBestStreak: newBestStreak,
           actualCurrentStreak: newCurrentStreak,
+          endedReason: 'failed',
         });
         return;
       }
@@ -420,12 +573,20 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
             actualQuestionsCompleted: questionsCompleted,
             actualBestStreak: newBestStreak,
             actualCurrentStreak: newCurrentStreak,
+            endedReason: 'completed',
           });
           return;
         }
         // Move to the next question in the queue and pre-generate options
         const nextIndex = currentIndex + 1;
-        const nextQuestion = questionQueue[nextIndex];
+        const stabilizedQueue = ensureNextQuestionIsDifferent(
+          questionQueue,
+          currentIndex,
+        );
+        if (stabilizedQueue !== questionQueue) {
+          setQuestionQueue(stabilizedQueue);
+        }
+        const nextQuestion = stabilizedQueue[nextIndex];
         if (nextQuestion) {
           generateShuffledOptions(nextQuestion.item);
         }
@@ -441,25 +602,27 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
         // Compute the new queue eagerly so we can read the next question
         // and generate options synchronously (avoiding a stale-render gap).
         const prevQueue = questionQueue;
-        let newQueue: GauntletQuestion<T>[];
-        if (prevQueue.length >= maxQueueSize) {
-          newQueue = prevQueue;
-        } else {
-          newQueue = [...prevQueue];
+        const newQueue: GauntletQuestion<T>[] = [...prevQueue];
+        if (prevQueue.length < maxQueueSize) {
           const failedQuestion = { ...newQueue[currentIndex] };
           const remainingLength = newQueue.length - (currentIndex + 1);
+          const minOffset = remainingLength > 1 ? 2 : 1;
+          const maxOffset = Math.max(minOffset, Math.min(remainingLength, 5));
           const insertOffset =
-            remainingLength > 0
-              ? random.integer(1, Math.max(1, Math.min(remainingLength, 5)))
-              : 1;
+            remainingLength > 0 ? random.integer(minOffset, maxOffset) : 1;
           const insertPos = currentIndex + insertOffset;
           newQueue.splice(insertPos, 0, failedQuestion);
         }
-        setQuestionQueue(newQueue);
+
+        const stabilizedQueue = ensureNextQuestionIsDifferent(
+          newQueue,
+          currentIndex,
+        );
+        setQuestionQueue(stabilizedQueue);
 
         // Generate options for the next question synchronously
         const nextIndex = currentIndex + 1;
-        const nextQuestion = newQueue[nextIndex];
+        const nextQuestion = stabilizedQueue[nextIndex];
         if (nextQuestion) {
           generateShuffledOptions(nextQuestion.item);
         }
@@ -470,6 +633,7 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
     [
       currentIndex,
       endGame,
+      ensureNextQuestionIsDifferent,
       totalQuestions,
       generateShuffledOptions,
       questionQueue,
@@ -481,8 +645,22 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
       if (!currentQuestion) return;
 
       recordAnswerTime();
+      const prompt = String(renderQuestion(currentQuestion.item, isReverseActive));
+      const expected = getCorrectOption
+        ? getCorrectOption(currentQuestion.item, isReverseActive)
+        : getCorrectAnswer(currentQuestion.item, isReverseActive);
 
       if (isCorrect) {
+        if (sessionIdRef.current) {
+          void appendAttempt(sessionIdRef.current, {
+            questionId: getItemId(currentQuestion.item),
+            questionPrompt: prompt,
+            expectedAnswers: [expected],
+            userAnswer: expected,
+            inputKind: gameMode === 'Pick' ? 'pick' : 'type',
+            isCorrect: true,
+          });
+        }
         playCorrect();
         setLastAnswerCorrect(true);
 
@@ -532,6 +710,16 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
         return;
       }
 
+      if (sessionIdRef.current) {
+        void appendAttempt(sessionIdRef.current, {
+          questionId: getItemId(currentQuestion.item),
+          questionPrompt: prompt,
+          expectedAnswers: [expected],
+          userAnswer: gameMode === 'Pick' ? '' : userAnswer.trim(),
+          inputKind: gameMode === 'Pick' ? 'pick' : 'type',
+          isCorrect: false,
+        });
+      }
       playError();
       setLastAnswerCorrect(false);
       setWrongAnswers(prev => prev + 1);
@@ -582,18 +770,50 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
       recordAnswerTime,
       regenThreshold,
       wrongAnswers,
+      renderQuestion,
+      getCorrectOption,
+      getCorrectAnswer,
+      gameMode,
+      userAnswer,
+      isReverseActive,
     ],
   );
 
   // Handle cancel
   const handleCancel = useCallback(() => {
     playClick();
+    if (phase === 'playing') {
+      void endGame({
+        completed: false,
+        actualLives: lives,
+        actualCorrectAnswers: correctAnswers,
+        actualWrongAnswers: wrongAnswers,
+        actualQuestionsCompleted: currentIndex,
+        actualBestStreak: bestStreak,
+        actualCurrentStreak: currentStreak,
+        endedReason: 'manual_quit',
+      });
+      return;
+    }
     if (isGauntletRoute) {
       router.push(`/${dojoType}`);
     } else {
       setPhase('pregame');
     }
-  }, [playClick, isGauntletRoute, router, dojoType]);
+  }, [
+    playClick,
+    phase,
+    endGame,
+    lives,
+    correctAnswers,
+    wrongAnswers,
+    currentIndex,
+    bestStreak,
+    currentStreak,
+    isGauntletRoute,
+    router,
+    dojoType,
+  ]);
 
   // Handler for new ActiveGame component - receives selected option and result directly
   const handleActiveGameSubmit = useCallback(
@@ -650,6 +870,7 @@ export default function Gauntlet<T>({ config, onCancel }: GauntletProps<T>) {
         dojoType={dojoType}
         stats={sessionStats}
         isNewBest={isNewBest}
+        endedReason={endedReason}
         onRestart={handleStart}
         onChangeSettings={() => setPhase('pregame')}
       />

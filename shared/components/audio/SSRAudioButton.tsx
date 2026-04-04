@@ -1,6 +1,4 @@
 'use client';
-import { useState, useEffect } from 'react';
-import AudioButton from './AudioButton';
 import { useAudioPreferences } from '@/features/Preferences';
 
 interface SSRAudioButtonProps {
@@ -11,31 +9,19 @@ interface SSRAudioButtonProps {
   disabled?: boolean;
   onPlay?: () => void;
   onStop?: () => void;
+  autoPlay?: boolean;
+  autoPlayTrigger?: string | number;
 }
 
-const SSRAudioButton: React.FC<SSRAudioButtonProps> = props => {
-  const [isClient, setIsClient] = useState(false);
+const SSRAudioButton: React.FC<SSRAudioButtonProps> = _props => {
   const { pronunciationEnabled } = useAudioPreferences();
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  // Don't render during SSR to prevent hydration mismatches
-  if (!isClient) {
+  if (!pronunciationEnabled) {
     return null;
   }
 
-  // If pronunciation is disabled, show a placeholder
-  if (!pronunciationEnabled) {
-    return (
-      <div className='rounded border p-2 text-xs text-(--border-color)'>
-        Audio disabled
-      </div>
-    );
-  }
-
-  return <AudioButton {...props} />;
+  // TODO: Re-enable by rendering AudioButton once pronunciation UX is finalized.
+  return null;
 };
 
 export default SSRAudioButton;

@@ -22,7 +22,9 @@ import {
 } from '@/shared/components/Game/GameBottomBar';
 import Stars from '@/shared/components/Game/Stars';
 import ProgressBar from '@/shared/components/Game/ProgressBar';
-import { useClick } from '@/shared/hooks/useAudio';
+import { useClick } from '@/shared/hooks/generic/useAudio';
+import { cn } from '@/shared/lib/utils';
+import { useThemePreferences } from '@/features/Preferences';
 import type { GauntletGameMode } from './types';
 
 // Duolingo-like spring animation config
@@ -279,6 +281,7 @@ export default function ActiveGame<T>({
   questionKey,
 }: ActiveGameProps<T>) {
   const { playClick } = useClick();
+  const isGlassMode = useThemePreferences().isGlassMode;
   const buttonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -445,7 +448,7 @@ export default function ActiveGame<T>({
   const showContinue = bottomBarState === 'correct';
   const showTryAgain = bottomBarState === 'wrong';
 
-  // Sizing classes based on dojoType (matching exact sizes from each WordBuildingGame)
+  // Sizing classes based on dojoType (matching exact sizes from each TilesMode implementation)
   // Kana: tiles text-2xl sm:text-3xl, question text-7xl sm:text-8xl
   // Kanji: tiles text-3xl/4xl (kanji) or text-xl/2xl (meaning), question text-8xl/9xl
   // Vocab: tiles text-3xl/4xl (japanese) or text-xl/2xl (meaning), question text-6xl/8xl
@@ -522,7 +525,7 @@ export default function ActiveGame<T>({
         <ProgressBar value={currentIndex} max={totalQuestions} />
       </div>
 
-      {/* Main Game Area - EXACTLY matching WordBuildingGame */}
+      {/* Main Game Area - EXACTLY matching the TilesMode implementations */}
       <div className='mt-8 flex w-full flex-col items-center gap-6 sm:mt-12 sm:w-4/5 sm:gap-10'>
         <AnimatePresence mode='wait'>
           <motion.div
@@ -534,7 +537,12 @@ export default function ActiveGame<T>({
             className='flex w-full flex-col items-center gap-6 sm:gap-10'
           >
             {/* Question Display */}
-            <div className='flex flex-row items-center gap-1'>
+            <div
+              className={cn(
+                'flex flex-row items-center gap-1',
+                isGlassMode && 'rounded-xl bg-(--card-color) px-4 py-2',
+              )}
+            >
               <motion.div
                 className={questionSizeClass}
                 initial={{ opacity: 0, y: -20 }}
@@ -557,6 +565,7 @@ export default function ActiveGame<T>({
                     ref={inputRef}
                     type='text'
                     value={userAnswer}
+                    autoFocus
                     onChange={e => setUserAnswer?.(e.target.value)}
                     disabled={isChecking}
                     autoComplete='off'
@@ -565,12 +574,12 @@ export default function ActiveGame<T>({
                     spellCheck={false}
                     placeholder='Type your answer...'
                     className={clsx(
-                      'w-full rounded-xl border-2 bg-transparent px-4 py-3 text-center text-2xl transition-colors outline-none sm:text-3xl',
+                      'game-input w-full rounded-xl border-2 bg-transparent px-4 py-3 text-center text-2xl transition-colors outline-none sm:text-3xl',
                       isChecking && checkedResult?.isCorrect
                         ? 'border-green-500 text-green-500'
                         : isChecking && !checkedResult?.isCorrect
                           ? 'border-red-500 text-red-500'
-                          : 'border-(--border-color) text-(--text-color) focus:border-(--main-color)',
+                          : 'border-(--border-color) text-(--text-color) focus:border-(--secondary-color)',
                     )}
                   />
                 </div>
@@ -659,7 +668,10 @@ export default function ActiveGame<T>({
                   return shuffledOptions.length > 0 ? (
                     <motion.div
                       key={questionKey}
-                      className='flex flex-col items-center gap-3 sm:gap-4'
+                      className={cn(
+                        'flex flex-col items-center gap-3 sm:gap-4',
+                        isGlassMode && 'rounded-xl bg-(--card-color) px-4 py-2',
+                      )}
                       variants={tileContainerVariants}
                       initial='hidden'
                       animate='visible'
@@ -686,7 +698,9 @@ export default function ActiveGame<T>({
           state={bottomBarState}
           onAction={showContinue || showTryAgain ? handleContinue : handleCheck}
           canCheck={canCheck}
-          feedbackTitle={showContinue ? 'Correct!' : 'Wrong!'}
+          feedbackTitle={
+            showContinue ? 'Correct!' : showTryAgain ? 'Wrong!' : ''
+          }
           feedbackContent={
             showTryAgain && currentQuestion
               ? isTypeMode && getCorrectAnswer
@@ -696,6 +710,7 @@ export default function ActiveGame<T>({
           }
           buttonRef={buttonRef}
           actionLabel={showContinue ? 'next' : showTryAgain ? 'next' : 'check'}
+          hideRetry
         />
 
         {/* Spacer */}
